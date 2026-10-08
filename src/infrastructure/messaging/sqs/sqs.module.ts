@@ -19,9 +19,8 @@ import { SqsService } from './sqs.service.js';
           endpoint: endpoint || undefined,
           credentials: endpoint
             ? {
-                accessKeyId: configService.getOrThrow<string>(
-                  'AWS_ACCESS_KEY_ID',
-                ),
+                accessKeyId:
+                  configService.getOrThrow<string>('AWS_ACCESS_KEY_ID'),
                 secretAccessKey: configService.getOrThrow<string>(
                   'AWS_SECRET_ACCESS_KEY',
                 ),

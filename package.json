@@ -10,15 +10,17 @@
     "build": "nest build",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start --exec bun",
     "start:dev": "nest start --watch --exec bun",
     "start:debug": "nest start --watch --debug --exec bun",
     "start:prod": "bun dist/main.js",
     "lint": "oxlint --type-aware src/ test/",
+    "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:cov": "bun test --coverage",
-    "test:e2e": "bun test ./test"
+    "test:e2e": "bun test ./test/app.e2e.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.1147.0",
