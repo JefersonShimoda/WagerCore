@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    container_name: wager-core-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wager_core
+      POSTGRES_USER: wager_core
+      POSTGRES_PASSWORD: wager_core_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wager_core -d wager_core"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ministack:
+    image: ministackorg/ministack:1.5.22
+    container_name: wager-core-ministack
+    restart: unless-stopped
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./docker/ministack/ready.d:/docker-entrypoint-initaws.d/ready.d
+
+volumes:
+  postgres_data:
