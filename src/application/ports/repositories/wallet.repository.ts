@@ -1,8 +1,8 @@
 import { Wallet } from '../../../domain/wallet/wallet.js';
 
-export interface WalletRepository {
-  findById(id: string): Promise<Wallet | null>;
-  findByPlayerAndCurrency(playerId: string, currency: string): Promise<Wallet | null>;
-  findByIdForUpdate(id: string): Promise<Wallet | null>;
-  save(wallet: Wallet): Promise<void>;
+export abstract class WalletRepository {
+  abstract findById(id: string): Promise<Wallet | null>;
+  abstract findByPlayerAndCurrency(playerId: string, currency: string): Promise<Wallet | null>;
+  abstract findByIdForUpdate(id: string): Promise<Wallet | null>;
+  abstract save(wallet: Wallet): Promise<void>;
 }
