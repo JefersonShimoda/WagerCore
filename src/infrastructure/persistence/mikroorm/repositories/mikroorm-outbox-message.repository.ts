@@ -24,4 +24,23 @@ export class MikroOrmOutboxMessageRepository implements OutboxMessageRepository 
     const entities = messages.map(msg => OutboxMessageMapper.toEntity(msg));
     this.em.persist(entities);
   }
+
+  async findPendingForUpdateAndLease(limit: number, leaseUntil: Date, now: Date): Promise<OutboxMessage[]> {
+    const connection = this.em.getConnection();
+    const sql = `
+      UPDATE outbox_messages
+      SET lease_until = ?
+      WHERE id IN (
+        SELECT id FROM outbox_messages
+        WHERE status = 'PENDING' AND (lease_until IS NULL OR lease_until <= ?)
+        ORDER BY occurred_at ASC
+        LIMIT ?
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING *
+    `;
+    const res = await connection.execute(sql, [leaseUntil, now, limit]);
+    const entities = res.map((row: any) => this.em.map(OutboxMessageEntity, row));
+    return entities.map((entity: OutboxMessageEntity) => OutboxMessageMapper.toDomain(entity));
+  }
 }
