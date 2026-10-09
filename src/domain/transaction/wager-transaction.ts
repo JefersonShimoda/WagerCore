@@ -208,4 +208,40 @@ export class WagerTransaction {
   public static rehydrate(props: WagerTransactionProps): WagerTransaction {
     return new WagerTransaction(props);
   }
+
+  public isTerminal(): boolean {
+    return this.props.status === 'PROCESSED' || this.props.status === 'REJECTED' || this.props.status === 'FAILED';
+  }
+
+  public affectsBalance(): boolean {
+    return this.props.kind !== 'LOSS';
+  }
+
+  public requiresReference(): boolean {
+    return this.props.kind === 'REFUND' || this.props.kind === 'ROLLBACK';
+  }
+
+  public matchesPayload(payloadHash: string): boolean {
+    return this.props.payloadHash === payloadHash;
+  }
+
+  public ledgerDirectionFor(reference?: WagerTransaction): 'DEBIT' | 'CREDIT' {
+    switch (this.props.kind) {
+      case 'OPENING':
+      case 'WIN':
+        return 'CREDIT';
+      case 'BET':
+        return 'DEBIT';
+      case 'REFUND':
+      case 'ROLLBACK':
+        if (!reference) {
+          throw new DomainError(`Reference transaction required to determine ledger direction for ${this.props.kind}`);
+        }
+        if (reference.kind === 'BET') return 'CREDIT';
+        if (reference.kind === 'WIN') return 'DEBIT';
+        throw new DomainError(`Cannot determine ledger direction for ${this.props.kind} with reference kind ${reference.kind}`);
+      case 'LOSS':
+        throw new DomainError('LOSS does not affect balance and has no ledger direction');
+    }
+  }
 }

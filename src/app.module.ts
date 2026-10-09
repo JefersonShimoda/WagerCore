@@ -36,6 +36,8 @@ import { InboxMessageRepository } from './application/ports/repositories/inbox-m
 import { OutboxMessageRepository } from './application/ports/repositories/outbox-message.repository.js';
 import { TransactionManager } from './application/ports/transaction-manager.port.js';
 import { Clock } from './application/ports/clock/clock.port.js';
+import { LoggerModule } from 'nestjs-pino';
+import { ObservabilityModule } from './observability/observability.module.js';
 
 @Module({
   imports: [
@@ -44,8 +46,15 @@ import { Clock } from './application/ports/clock/clock.port.js';
       cache: true,
       validate: (config) => envSchema.parse(config),
     }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
+        transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
+      },
+    }),
     MikroOrmModule.forRoot(mikroOrmConfig),
     ScheduleModule.forRoot(),
+    ObservabilityModule,
     SqsModule,
     HealthModule,
   ],

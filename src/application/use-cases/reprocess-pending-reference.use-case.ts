@@ -45,8 +45,9 @@ export class ReprocessPendingReferenceUseCase {
       );
 
       if (!reference) {
-        // Increment attempts and schedule for later
-        const nextAttemptAt = new Date(this.clock.now().getTime() + 10000); // retry in 10s
+        // Increment attempts and schedule for later (exponential backoff)
+        const backoffMs = Math.pow(2, currentTxn.attempts) * 5000;
+        const nextAttemptAt = new Date(this.clock.now().getTime() + backoffMs);
         currentTxn.incrementAttempt(nextAttemptAt);
         await this.wagerRepo.save(currentTxn);
         return;
@@ -54,12 +55,49 @@ export class ReprocessPendingReferenceUseCase {
 
       currentTxn.linkReference(reference.id);
 
+      const rejectTxn = async (code: any) => {
+        currentTxn.markRejected(code, this.clock.now());
+        await this.wagerRepo.save(currentTxn);
+        const event = new WagerTransactionRejected(currentTxn.id, code);
+        await this.outboxRepo.save(OutboxMessage.create(currentTxn.id, 'WagerTransactionRejected', 1, currentTxn.idempotencyKey, event, this.clock.now()));
+      };
+
+      if (['REFUND', 'ROLLBACK'].includes(currentTxn.kind)) {
+        if (
+          reference.providerId !== currentTxn.providerId ||
+          reference.playerId !== currentTxn.playerId ||
+          reference.walletId !== currentTxn.walletId ||
+          reference.currency !== currentTxn.currency ||
+          reference.roundId !== currentTxn.roundId
+        ) {
+          await rejectTxn('INVALID_REFERENCE');
+          return;
+        }
+
+        if (currentTxn.kind === 'REFUND' && reference.kind !== 'BET') {
+          await rejectTxn('INVALID_REFERENCE');
+          return;
+        }
+        if (currentTxn.kind === 'ROLLBACK' && !['BET', 'WIN', 'REFUND'].includes(reference.kind)) {
+          await rejectTxn('INVALID_REFERENCE');
+          return;
+        }
+
+        if (!currentTxn.money.equals(reference.money)) {
+          await rejectTxn('INVALID_REFERENCE');
+          return;
+        }
+
+        const alreadyReversed = await this.wagerRepo.hasReversal(reference.id, currentTxn.kind);
+        if (alreadyReversed) {
+          await rejectTxn('ALREADY_REVERSED');
+          return;
+        }
+      }
+
       const wallet = await this.walletRepo.findByIdForUpdate(currentTxn.walletId);
       if (!wallet) {
-        currentTxn.markRejected('WALLET_NOT_FOUND', this.clock.now());
-        await this.wagerRepo.save(currentTxn);
-        const event = new WagerTransactionRejected(currentTxn.id, 'WALLET_NOT_FOUND');
-        await this.outboxRepo.save(OutboxMessage.create(currentTxn.id, 'WagerTransactionRejected', 1, currentTxn.idempotencyKey, event, this.clock.now()));
+        await rejectTxn('WALLET_NOT_FOUND');
         return;
       }
 
@@ -77,14 +115,17 @@ export class ReprocessPendingReferenceUseCase {
         } else if (currentTxn.kind === 'LOSS') {
           // No money movement
         } else if (currentTxn.kind === 'ROLLBACK') {
-          // TODO: complete rollback logic
+          direction = currentTxn.ledgerDirectionFor(reference!);
+          if (direction === 'DEBIT') {
+            wallet.debit(appliedAmount, this.clock.now());
+          } else {
+            wallet.credit(appliedAmount, this.clock.now());
+          }
         }
       } catch (domainError: any) {
         if (domainError.message.includes('Insufficient funds') || domainError.code === 'INSUFFICIENT_FUNDS') {
-          currentTxn.markRejected('INSUFFICIENT_FUNDS', this.clock.now());
-          await this.wagerRepo.save(currentTxn);
-          const event = new WagerTransactionRejected(currentTxn.id, 'INSUFFICIENT_FUNDS');
-          await this.outboxRepo.save(OutboxMessage.create(currentTxn.id, 'WagerTransactionRejected', 1, currentTxn.idempotencyKey, event, this.clock.now()));
+          const failureCode = currentTxn.kind === 'ROLLBACK' ? 'REVERSAL_WOULD_OVERDRAW' : 'INSUFFICIENT_FUNDS';
+          await rejectTxn(failureCode);
           return;
         }
         throw domainError;

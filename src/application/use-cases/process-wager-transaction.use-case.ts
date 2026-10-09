@@ -36,6 +36,8 @@ export interface ProcessWagerTransactionCommand {
   };
 }
 
+import { MetricsService } from '../../observability/metrics.service.js';
+
 @Injectable()
 export class ProcessWagerTransactionUseCase {
   constructor(
@@ -46,6 +48,7 @@ export class ProcessWagerTransactionUseCase {
     private readonly outboxRepo: OutboxMessageRepository,
     private readonly clock: Clock,
     private readonly inboxRepo: InboxMessageRepository,
+    private readonly metrics: MetricsService,
   ) {}
 
   async execute(command: ProcessWagerTransactionCommand): Promise<WagerTransaction> {
@@ -87,6 +90,7 @@ export class ProcessWagerTransactionUseCase {
         throw new ConflictError('Payload hash mismatch for idempotency key', 'IDEMPOTENCY_CONFLICT');
       }
       // Idempotent replay: return the durable existing state
+      this.metrics.duplicatesTotal.inc();
       return existing;
     }
 
@@ -125,8 +129,10 @@ export class ProcessWagerTransactionUseCase {
         }
 
         // 3. Validate domain and references
+        // 3. Validate domain and references
+        let reference: WagerTransaction | null = null;
         if (['WIN', 'REFUND', 'ROLLBACK'].includes(command.kind) && command.referenceExternalTransactionId) {
-          const reference = await this.wagerRepo.findByProviderAndExternalId(
+          reference = await this.wagerRepo.findByProviderAndExternalId(
             command.providerId,
             command.referenceExternalTransactionId
           );
@@ -143,6 +149,42 @@ export class ProcessWagerTransactionUseCase {
           }
 
           currentTxn.linkReference(reference.id);
+
+          const rejectTxn = async (code: any) => {
+            currentTxn.markRejected(code, this.clock.now());
+            await this.wagerRepo.save(currentTxn);
+            const event = new WagerTransactionRejected(currentTxn.id, code);
+            await this.outboxRepo.save(OutboxMessage.create(currentTxn.id, 'WagerTransactionRejected', 1, currentTxn.idempotencyKey, event, this.clock.now()));
+            return currentTxn;
+          };
+
+          if (['REFUND', 'ROLLBACK'].includes(command.kind)) {
+            if (
+              reference.providerId !== currentTxn.providerId ||
+              reference.playerId !== currentTxn.playerId ||
+              reference.walletId !== currentTxn.walletId ||
+              reference.currency !== currentTxn.currency ||
+              reference.roundId !== currentTxn.roundId
+            ) {
+              return rejectTxn('INVALID_REFERENCE');
+            }
+
+            if (command.kind === 'REFUND' && reference.kind !== 'BET') {
+              return rejectTxn('INVALID_REFERENCE');
+            }
+            if (command.kind === 'ROLLBACK' && !['BET', 'WIN', 'REFUND'].includes(reference.kind)) {
+              return rejectTxn('INVALID_REFERENCE');
+            }
+
+            if (!currentTxn.money.equals(reference.money)) {
+              return rejectTxn('INVALID_REFERENCE');
+            }
+
+            const alreadyReversed = await this.wagerRepo.hasReversal(reference.id, command.kind);
+            if (alreadyReversed) {
+              return rejectTxn('ALREADY_REVERSED');
+            }
+          }
         }
 
         // 4. Apply financial operation
@@ -160,13 +202,19 @@ export class ProcessWagerTransactionUseCase {
           } else if (command.kind === 'LOSS') {
             // No money movement
           } else if (command.kind === 'ROLLBACK') {
-            // TODO: implement complete rollback
+            direction = currentTxn.ledgerDirectionFor(reference!);
+            if (direction === 'DEBIT') {
+              wallet.debit(appliedAmount, this.clock.now());
+            } else {
+              wallet.credit(appliedAmount, this.clock.now());
+            }
           }
         } catch (domainError: any) {
           if (domainError.message.includes('Insufficient funds') || domainError.code === 'INSUFFICIENT_FUNDS') {
-            currentTxn.markRejected('INSUFFICIENT_FUNDS', this.clock.now());
+            const failureCode = currentTxn.kind === 'ROLLBACK' ? 'REVERSAL_WOULD_OVERDRAW' : 'INSUFFICIENT_FUNDS';
+            currentTxn.markRejected(failureCode, this.clock.now());
             await this.wagerRepo.save(currentTxn);
-            const event = new WagerTransactionRejected(currentTxn.id, 'INSUFFICIENT_FUNDS');
+            const event = new WagerTransactionRejected(currentTxn.id, failureCode);
             await this.outboxRepo.save(OutboxMessage.create(currentTxn.id, 'WagerTransactionRejected', 1, currentTxn.idempotencyKey, event, this.clock.now()));
             return currentTxn;
           }

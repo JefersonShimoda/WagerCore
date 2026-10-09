@@ -98,4 +98,12 @@ export class WalletLedgerEntry {
   public static rehydrate(props: WalletLedgerEntryProps): WalletLedgerEntry {
     return new WalletLedgerEntry(props);
   }
+
+  public isBalanced(): boolean {
+    if (this.props.direction === 'DEBIT') {
+      return this.props.balanceBefore.subtract(this.props.money).equals(this.props.balanceAfter);
+    } else {
+      return this.props.balanceBefore.add(this.props.money).equals(this.props.balanceAfter);
+    }
+  }
 }

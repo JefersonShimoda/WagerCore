@@ -89,4 +89,21 @@ export class OutboxMessage {
   static rehydrate(props: OutboxMessageProps): OutboxMessage {
     return new OutboxMessage(props);
   }
+
+  isPending(): boolean {
+    return this.props.status === 'PENDING' || this.props.status === 'PROCESSING';
+  }
+
+  isDue(now: Date): boolean {
+    if (this.props.status !== 'PENDING') return false;
+    return !this.props.nextAttemptAt || this.props.nextAttemptAt <= now;
+  }
+
+  scheduleRetry(now: Date): void {
+    this.props.status = 'PENDING';
+    this.props.attempts++;
+    const backoffMs = Math.pow(2, this.props.attempts) * 1000;
+    this.props.nextAttemptAt = new Date(now.getTime() + backoffMs);
+    this.props.leaseUntil = undefined;
+  }
 }

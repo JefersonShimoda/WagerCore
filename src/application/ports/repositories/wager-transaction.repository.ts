@@ -6,6 +6,7 @@ export abstract class WagerTransactionRepository {
   abstract findByProviderAndExternalId(providerId: string, externalTransactionId: string): Promise<WagerTransaction | null>;
   abstract findByIdempotencyKey(idempotencyKey: string): Promise<WagerTransaction | null>;
   abstract findPendingReferenceIds(limit: number, now: Date): Promise<string[]>;
+  abstract hasReversal(referenceTransactionId: string, kind: string): Promise<boolean>;
   abstract insertIdempotencyCheck(transaction: WagerTransaction): Promise<boolean>;
   abstract save(transaction: WagerTransaction): Promise<void>;
 }

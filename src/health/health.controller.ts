@@ -15,6 +15,18 @@ export class HealthController {
   @Get()
   @HealthCheck()
   check() {
+    return this.checkReadiness();
+  }
+
+  @Get('liveness')
+  @HealthCheck()
+  checkLiveness() {
+    return this.health.check([]);
+  }
+
+  @Get('readiness')
+  @HealthCheck()
+  checkReadiness() {
     return this.health.check([
       () => this.database.isHealthy('database'),
       () => this.sqs.isHealthy('sqs'),

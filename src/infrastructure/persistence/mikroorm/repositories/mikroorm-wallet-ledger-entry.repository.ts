@@ -4,8 +4,6 @@ import { WalletLedgerEntryRepository } from '../../../../application/ports/repos
 import { WalletLedgerEntry } from '../../../../domain/wallet/wallet-ledger-entry.js';
 import { WalletLedgerEntryMapper } from '../../mappers/wallet-ledger-entry.mapper.js';
 
-import { WalletLedgerEntryEntity } from '../entities/wallet-ledger-entry.entity.js';
-
 @Injectable()
 export class MikroOrmWalletLedgerEntryRepository implements WalletLedgerEntryRepository {
   constructor(private readonly em: EntityManager) {}
@@ -16,11 +14,11 @@ export class MikroOrmWalletLedgerEntryRepository implements WalletLedgerEntryRep
   }
 
   async calculateSumForWallet(walletId: string): Promise<string> {
-    const qb = this.em.createQueryBuilder(WalletLedgerEntryEntity);
-    const result = await qb
-      .select('SUM(CASE WHEN direction = \'CREDIT\' THEN amount ELSE -amount END) as total')
-      .where({ walletId })
-      .execute('get');
-    return (result as any)?.total?.toString() || '0.00';
+    const connection = this.em.getConnection();
+    const result = await connection.execute(
+      'SELECT SUM(CASE WHEN direction = \'CREDIT\' THEN amount ELSE -amount END) as total FROM wallet_ledger_entries WHERE wallet_id = ?',
+      [walletId]
+    );
+    return result[0]?.total?.toString() || '0.00';
   }
 }

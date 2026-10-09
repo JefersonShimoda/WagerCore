@@ -34,4 +34,8 @@ export class InboxMessage {
   static rehydrate(props: InboxMessageProps): InboxMessage {
     return new InboxMessage(props);
   }
+
+  isProcessed(): boolean {
+    return this.props.processedAt !== undefined;
+  }
 }

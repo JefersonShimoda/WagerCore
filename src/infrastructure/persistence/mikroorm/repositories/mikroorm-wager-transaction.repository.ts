@@ -42,6 +42,19 @@ export class MikroOrmWagerTransactionRepository implements WagerTransactionRepos
     return entity ? WagerTransactionMapper.toDomain(entity) : null;
   }
 
+  async hasReversal(referenceTransactionId: string, kind: string): Promise<boolean> {
+    const qb = this.em.createQueryBuilder(WagerTransactionEntity);
+    const result = await qb
+      .count()
+      .where({
+        referenceTransactionId,
+        kind,
+        status: 'PROCESSED'
+      })
+      .execute('get');
+    return Number(result.count) > 0;
+  }
+
   async insertIdempotencyCheck(transaction: WagerTransaction): Promise<boolean> {
     const entity = WagerTransactionMapper.toPersistence(transaction);
     
@@ -52,8 +65,7 @@ export class MikroOrmWagerTransactionRepository implements WagerTransactionRepos
       .ignore()
       .returning('id')
       .execute();
-    
-    return Array.isArray(res) && res.length > 0;
+    return (res as any).affectedRows > 0;
   }
 
   async save(transaction: WagerTransaction): Promise<void> {
