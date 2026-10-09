@@ -3,10 +3,19 @@ import { TransactionManager } from '../ports/transaction-manager.port.js';
 import { WagerTransactionRepository } from '../ports/repositories/wager-transaction.repository.js';
 import { WalletRepository } from '../ports/repositories/wallet.repository.js';
 import { WalletLedgerEntryRepository } from '../ports/repositories/wallet-ledger-entry.repository.js';
+import { OutboxMessageRepository } from '../ports/repositories/outbox-message.repository.js';
+import { InboxMessageRepository } from '../ports/repositories/inbox-message.repository.js';
 import { Clock } from '../ports/clock/clock.port.js';
 import { WagerTransaction, TransactionKind } from '../../domain/transaction/wager-transaction.js';
 import { WalletLedgerEntry } from '../../domain/wallet/wallet-ledger-entry.js';
+import { OutboxMessage } from '../../domain/messaging/outbox-message.js';
 import { ConflictError } from '../errors/conflict.error.js';
+import {
+  WalletBalanceChanged,
+  WagerTransactionProcessed,
+  WagerTransactionRejected,
+  WagerTransactionPendingReference
+} from '../events/integration.events.js';
 
 export interface ProcessWagerTransactionCommand {
   providerId: string;
@@ -20,6 +29,10 @@ export interface ProcessWagerTransactionCommand {
   kind: TransactionKind;
   money: { amount: string; currency: string };
   referenceExternalTransactionId?: string;
+  inboxMessage?: {
+    consumerName: string;
+    messageId: string;
+  };
 }
 
 @Injectable()
@@ -29,7 +42,9 @@ export class ProcessWagerTransactionUseCase {
     private readonly wagerRepo: WagerTransactionRepository,
     private readonly walletRepo: WalletRepository,
     private readonly ledgerRepo: WalletLedgerEntryRepository,
+    private readonly outboxRepo: OutboxMessageRepository,
     private readonly clock: Clock,
+    private readonly inboxRepo: InboxMessageRepository,
   ) {}
 
   async execute(command: ProcessWagerTransactionCommand): Promise<WagerTransaction> {
@@ -84,6 +99,8 @@ export class ProcessWagerTransactionUseCase {
       if (!wallet) {
         currentTxn.markRejected('WALLET_NOT_FOUND', this.clock.now());
         await this.wagerRepo.save(currentTxn);
+        const event = new WagerTransactionRejected(currentTxn.id, 'WALLET_NOT_FOUND');
+        await this.outboxRepo.save(OutboxMessage.create(currentTxn.id, 'WagerTransactionRejected', 1, currentTxn.idempotencyKey, event, this.clock.now()));
         return currentTxn;
       }
 
@@ -91,12 +108,12 @@ export class ProcessWagerTransactionUseCase {
       if (wallet.currency !== command.money.currency) {
         currentTxn.markRejected('CURRENCY_MISMATCH', this.clock.now());
         await this.wagerRepo.save(currentTxn);
+        const event = new WagerTransactionRejected(currentTxn.id, 'CURRENCY_MISMATCH');
+        await this.outboxRepo.save(OutboxMessage.create(currentTxn.id, 'WagerTransactionRejected', 1, currentTxn.idempotencyKey, event, this.clock.now()));
         return currentTxn;
       }
 
       // 3. Validate domain and references
-      // TODO: Resolve reference if required (WIN, REFUND, ROLLBACK)
-      // For now, if reference is required but we haven't resolved it, mark PENDING_REFERENCE
       if (['WIN', 'REFUND', 'ROLLBACK'].includes(command.kind) && command.referenceExternalTransactionId) {
         const reference = await this.wagerRepo.findByProviderAndExternalId(
           command.providerId,
@@ -104,20 +121,17 @@ export class ProcessWagerTransactionUseCase {
         );
 
         if (!reference) {
-          // It's missing, go to PENDING_REFERENCE
-          // Pending reference retry schedule logic
           const nextAttemptAt = new Date(this.clock.now().getTime() + 5000);
           const expiresAt = new Date(this.clock.now().getTime() + 30 * 60 * 1000);
           currentTxn.markPendingReference(expiresAt, nextAttemptAt);
           await this.wagerRepo.save(currentTxn);
-          // Emit WagerTransactionPendingReference event (Outbox)
+          
+          const event = new WagerTransactionPendingReference(currentTxn.id, command.referenceExternalTransactionId);
+          await this.outboxRepo.save(OutboxMessage.create(currentTxn.id, 'WagerTransactionPendingReference', 1, currentTxn.idempotencyKey, event, this.clock.now()));
           return currentTxn;
         }
 
         currentTxn.linkReference(reference.id);
-        
-        // TODO: Validate reference rules (status must be PROCESSED, kind logic, etc)
-        // If reference is invalid: currentTxn.markRejected('INVALID_REFERENCE', ...)
       }
 
       // 4. Apply financial operation
@@ -135,15 +149,14 @@ export class ProcessWagerTransactionUseCase {
         } else if (command.kind === 'LOSS') {
           // No money movement
         } else if (command.kind === 'ROLLBACK') {
-          // Inverse of original financial direction (needs reference loading)
-          // Simplified for now, will implement exact rollback logic
           // TODO: implement complete rollback
         }
       } catch (domainError: any) {
-        // Map domain errors to failure codes
         if (domainError.message.includes('Insufficient funds') || domainError.code === 'INSUFFICIENT_FUNDS') {
           currentTxn.markRejected('INSUFFICIENT_FUNDS', this.clock.now());
           await this.wagerRepo.save(currentTxn);
+          const event = new WagerTransactionRejected(currentTxn.id, 'INSUFFICIENT_FUNDS');
+          await this.outboxRepo.save(OutboxMessage.create(currentTxn.id, 'WagerTransactionRejected', 1, currentTxn.idempotencyKey, event, this.clock.now()));
           return currentTxn;
         }
         throw domainError;
@@ -167,8 +180,49 @@ export class ProcessWagerTransactionUseCase {
       await this.walletRepo.save(wallet);
       await this.wagerRepo.save(currentTxn);
 
-      // 7. Create Outbox records (TODO)
-      // 8. Inbox processed (TODO)
+      // 7. Create Outbox records
+      const processedEvent = new WagerTransactionProcessed(
+        currentTxn.id,
+        wallet.id,
+        currentTxn.kind,
+        wallet.balance.toJSON().amount,
+        wallet.currency
+      );
+      await this.outboxRepo.save(OutboxMessage.create(
+        currentTxn.id,
+        'WagerTransactionProcessed',
+        1,
+        currentTxn.idempotencyKey,
+        processedEvent,
+        this.clock.now()
+      ));
+
+      if (direction) {
+        const balanceEvent = new WalletBalanceChanged(
+          wallet.id,
+          wallet.playerId,
+          wallet.currency,
+          wallet.balance.toJSON().amount,
+          wallet.version
+        );
+        await this.outboxRepo.save(OutboxMessage.create(
+          wallet.id,
+          'WalletBalanceChanged',
+          1,
+          `${currentTxn.idempotencyKey}-balance`,
+          balanceEvent,
+          this.clock.now()
+        ));
+      }
+
+      // 8. Inbox processed
+      if (command.inboxMessage) {
+        const inbox = await this.inboxRepo.findById(command.inboxMessage.consumerName, command.inboxMessage.messageId);
+        if (inbox) {
+          inbox.markProcessed(this.clock.now());
+          await this.inboxRepo.save(inbox);
+        }
+      }
 
       return currentTxn; // 9. Commit
     });

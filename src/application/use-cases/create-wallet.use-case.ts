@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { WalletRepository } from '../ports/repositories/wallet.repository.js';
 import { Wallet } from '../../domain/wallet/wallet.js';
 import { Money } from '../../domain/shared/money/money.js';
-import { DomainError } from '../../domain/shared/errors/domain.error.js';
 import { Clock } from '../ports/clock/clock.port.js';
 
 export interface CreateWalletCommand {
