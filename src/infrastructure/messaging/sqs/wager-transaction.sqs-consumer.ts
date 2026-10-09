@@ -22,7 +22,7 @@ export class WagerTransactionSqsConsumer implements OnModuleInit, OnModuleDestro
   async onModuleInit() {
     this.queueUrl = await this.sqsService.getTransactionsQueueUrl();
     this.isRunning = true;
-    this.poll();
+    void this.poll();
   }
 
   onModuleDestroy() {
@@ -61,7 +61,7 @@ export class WagerTransactionSqsConsumer implements OnModuleInit, OnModuleDestro
       
       // Calculate payload hash
       const hasher = new CanonicalPayloadHasher();
-      const payloadHash = await hasher.hash(payload);
+      const payloadHash = hasher.hash(payload);
 
       await this.processWagerTxnUseCase.execute({
         providerId: payload.providerId,
