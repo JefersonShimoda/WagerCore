@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/postgresql';
+import { EntityManager, LockMode } from '@mikro-orm/postgresql';
 import { WagerTransactionRepository } from '../../../../application/ports/repositories/wager-transaction.repository.js';
 import { WagerTransaction } from '../../../../domain/transaction/wager-transaction.js';
 import { WagerTransactionEntity } from '../entities/wager-transaction.entity.js';
@@ -12,6 +12,24 @@ export class MikroOrmWagerTransactionRepository implements WagerTransactionRepos
   async findById(id: string): Promise<WagerTransaction | null> {
     const entity = await this.em.findOne(WagerTransactionEntity, { id });
     return entity ? WagerTransactionMapper.toDomain(entity) : null;
+  }
+
+  async findByIdForUpdate(id: string): Promise<WagerTransaction | null> {
+    const entity = await this.em.findOne(WagerTransactionEntity, { id }, { lockMode: LockMode.PESSIMISTIC_WRITE });
+    return entity ? WagerTransactionMapper.toDomain(entity) : null;
+  }
+
+  async findPendingReferenceIds(limit: number, now: Date): Promise<string[]> {
+    const qb = this.em.createQueryBuilder(WagerTransactionEntity);
+    const entities = await qb
+      .select('id')
+      .where({
+        status: 'PENDING_REFERENCE',
+        nextAttemptAt: { $lte: now }
+      })
+      .limit(limit)
+      .execute();
+    return entities.map((row: any) => row.id);
   }
 
   async findByProviderAndExternalId(providerId: string, externalTransactionId: string): Promise<WagerTransaction | null> {

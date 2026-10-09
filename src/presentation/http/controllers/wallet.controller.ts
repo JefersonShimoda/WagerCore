@@ -1,6 +1,7 @@
-import { Controller, Post, Body, UsePipes, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, UsePipes, HttpCode, HttpStatus, Param, ParseUUIDPipe } from '@nestjs/common';
 import { z } from 'zod';
 import { CreateWalletUseCase } from '../../../application/use-cases/create-wallet.use-case.js';
+import { ReconcileWalletUseCase } from '../../../application/use-cases/reconcile-wallet.use-case.js';
 import { ZodValidationPipe } from '../pipes/zod-validation.pipe.js';
 
 const createWalletSchema = z.object({
@@ -12,7 +13,10 @@ export type CreateWalletDto = z.infer<typeof createWalletSchema>;
 
 @Controller('wallets')
 export class WalletController {
-  constructor(private readonly createWalletUseCase: CreateWalletUseCase) {}
+  constructor(
+    private readonly createWalletUseCase: CreateWalletUseCase,
+    private readonly reconcileUseCase: ReconcileWalletUseCase,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -26,5 +30,11 @@ export class WalletController {
     return {
       id: walletId,
     };
+  }
+
+  @Post(':id/reconcile')
+  @HttpCode(HttpStatus.OK)
+  async reconcile(@Param('id', ParseUUIDPipe) id: string) {
+    return this.reconcileUseCase.execute(id);
   }
 }
