@@ -4,12 +4,15 @@ import { WalletLedgerEntryRepository } from '../../../../application/ports/repos
 import { WalletLedgerEntry } from '../../../../domain/wallet/wallet-ledger-entry.js';
 import { WalletLedgerEntryMapper } from '../../mappers/wallet-ledger-entry.mapper.js';
 
+import { WalletLedgerEntryEntity } from '../entities/wallet-ledger-entry.entity.js';
+
 @Injectable()
 export class MikroOrmWalletLedgerEntryRepository implements WalletLedgerEntryRepository {
   constructor(private readonly em: EntityManager) {}
 
   async save(entry: WalletLedgerEntry): Promise<void> {
-    const entity = WalletLedgerEntryMapper.toPersistence(entry);
+    const data = WalletLedgerEntryMapper.toPersistence(entry);
+    const entity = this.em.create(WalletLedgerEntryEntity, data);
     this.em.persist(entity);
   }
 

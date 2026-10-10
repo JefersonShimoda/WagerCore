@@ -22,23 +22,23 @@ export class OutboxMessageMapper {
     });
   }
 
-  static toEntity(domain: OutboxMessage): OutboxMessageEntity {
-    const entity = new OutboxMessageEntity();
-    entity.id = domain.id;
-    entity.eventId = domain.eventId;
-    entity.aggregateId = domain.aggregateId;
-    entity.eventType = domain.eventType;
-    entity.version = domain.version;
-    entity.correlationId = domain.correlationId;
-    entity.causationId = domain.causationId;
-    entity.payload = domain.payload;
-    entity.occurredAt = domain.occurredAt;
-    entity.attempts = domain.attempts;
-    entity.nextAttemptAt = domain.nextAttemptAt;
-    entity.leaseUntil = domain.leaseUntil;
-    entity.status = domain.status;
-    entity.publishedAt = domain.publishedAt;
-    entity.lastError = domain.lastError;
-    return entity;
+  static toEntity(domain: OutboxMessage): any {
+    return {
+      id: domain.id,
+      eventId: domain.eventId,
+      aggregateId: domain.aggregateId,
+      eventType: domain.eventType,
+      version: domain.version,
+      correlationId: domain.correlationId,
+      causationId: domain.causationId,
+      payload: domain.payload,
+      occurredAt: domain.occurredAt,
+      attempts: domain.attempts,
+      nextAttemptAt: domain.nextAttemptAt,
+      leaseUntil: domain.leaseUntil,
+      status: domain.status,
+      publishedAt: domain.publishedAt,
+      lastError: domain.lastError,
+    };
   }
 }

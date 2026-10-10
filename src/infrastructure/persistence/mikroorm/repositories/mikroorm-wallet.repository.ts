@@ -29,16 +29,23 @@ export class MikroOrmWalletRepository implements WalletRepository {
   }
 
   async save(wallet: Wallet): Promise<void> {
-    const entity = WalletMapper.toEntity(wallet);
-    // Use upsert or EM merge to update/insert properly
     const exists = await this.em.findOne(WalletEntity, { id: wallet.id });
     if (exists) {
-      exists.balance = entity.balance;
-      exists.version = entity.version;
-      exists.updatedAt = entity.updatedAt;
+      exists.balance = wallet.balance.toJSON().amount;
+      exists.version = wallet.version;
+      exists.updatedAt = wallet.updatedAt;
       this.em.persist(exists);
     } else {
-      this.em.persist(entity);
+      const newEntity = this.em.create(WalletEntity, {
+        id: wallet.id,
+        playerId: wallet.playerId,
+        currency: wallet.currency,
+        balance: wallet.balance.toJSON().amount,
+        version: wallet.version,
+        createdAt: wallet.createdAt,
+        updatedAt: wallet.updatedAt,
+      });
+      this.em.persist(newEntity);
     }
     await this.em.flush();
   }

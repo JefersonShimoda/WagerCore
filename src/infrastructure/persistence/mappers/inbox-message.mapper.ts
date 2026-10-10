@@ -12,13 +12,13 @@ export class InboxMessageMapper {
     });
   }
 
-  static toEntity(domain: InboxMessage): InboxMessageEntity {
-    const entity = new InboxMessageEntity();
-    entity.consumerName = domain.consumerName;
-    entity.messageId = domain.messageId;
-    entity.payloadHash = domain.payloadHash;
-    entity.receivedAt = domain.receivedAt;
-    entity.processedAt = domain.processedAt;
-    return entity;
+  static toEntity(domain: InboxMessage): any {
+    return {
+      consumerName: domain.consumerName,
+      messageId: domain.messageId,
+      payloadHash: domain.payloadHash,
+      receivedAt: domain.receivedAt,
+      processedAt: domain.processedAt,
+    };
   }
 }

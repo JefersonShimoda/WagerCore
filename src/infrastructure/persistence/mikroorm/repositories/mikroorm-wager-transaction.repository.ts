@@ -56,11 +56,11 @@ export class MikroOrmWagerTransactionRepository implements WagerTransactionRepos
   }
 
   async insertIdempotencyCheck(transaction: WagerTransaction): Promise<boolean> {
-    const entity = WagerTransactionMapper.toPersistence(transaction);
+    const data = WagerTransactionMapper.toPersistence(transaction);
     
     const qb = this.em.createQueryBuilder(WagerTransactionEntity);
     const res = await qb
-      .insert(entity)
+      .insert(data)
       .onConflict('idempotencyKey')
       .ignore()
       .returning('id')
@@ -69,12 +69,13 @@ export class MikroOrmWagerTransactionRepository implements WagerTransactionRepos
   }
 
   async save(transaction: WagerTransaction): Promise<void> {
-    const entity = WagerTransactionMapper.toPersistence(transaction);
+    const data = WagerTransactionMapper.toPersistence(transaction);
     const exists = await this.em.findOne(WagerTransactionEntity, { id: transaction.id });
     if (exists) {
-      this.em.assign(exists, entity);
+      this.em.assign(exists, data);
       this.em.persist(exists);
     } else {
+      const entity = this.em.create(WagerTransactionEntity, data);
       this.em.persist(entity);
     }
   }

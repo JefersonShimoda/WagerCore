@@ -16,20 +16,19 @@ export class WalletLedgerEntryMapper {
     });
   }
 
-  static toPersistence(domain: WalletLedgerEntry): WalletLedgerEntryEntity {
-    const entity = new WalletLedgerEntryEntity();
-    entity.id = domain.id;
-    entity.walletId = domain.walletId;
-    entity.transactionId = domain.transactionId;
-    entity.direction = domain.direction;
-    entity.amount = domain.money.toJSON().amount;
-    entity.currency = domain.money.currency;
-    entity.balanceBeforeAmount = domain.balanceBefore.toJSON().amount;
-    entity.balanceBeforeCurrency = domain.balanceBefore.currency;
-    entity.balanceAfterAmount = domain.balanceAfter.toJSON().amount;
-    entity.balanceAfterCurrency = domain.balanceAfter.currency;
-    entity.createdAt = domain.createdAt;
-    
-    return entity;
+  static toPersistence(domain: WalletLedgerEntry): any {
+    return {
+      id: domain.id,
+      walletId: domain.walletId,
+      transactionId: domain.transactionId,
+      direction: domain.direction,
+      amount: domain.money.toJSON().amount,
+      currency: domain.money.currency,
+      balanceBeforeAmount: domain.balanceBefore.toJSON().amount,
+      balanceBeforeCurrency: domain.balanceBefore.currency,
+      balanceAfterAmount: domain.balanceAfter.toJSON().amount,
+      balanceAfterCurrency: domain.balanceAfter.currency,
+      createdAt: domain.createdAt,
+    };
   }
 }

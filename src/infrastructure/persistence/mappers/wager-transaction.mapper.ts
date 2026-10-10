@@ -30,32 +30,31 @@ export class WagerTransactionMapper {
     });
   }
 
-  static toPersistence(domain: WagerTransaction): WagerTransactionEntity {
-    const entity = new WagerTransactionEntity();
-    entity.id = domain.id;
-    entity.providerId = domain.providerId;
-    entity.externalTransactionId = domain.externalTransactionId;
-    entity.idempotencyKey = domain.idempotencyKey;
-    entity.payloadHash = domain.payloadHash;
-    entity.walletId = domain.walletId;
-    entity.playerId = domain.playerId;
-    entity.roundId = domain.roundId;
-    entity.gameId = domain.gameId;
-    entity.kind = domain.kind;
-    entity.amount = domain.amount;
-    entity.currency = domain.currency;
-    entity.referenceExternalTransactionId = domain.referenceExternalTransactionId;
-    entity.referenceTransactionId = domain.referenceTransactionId;
-    entity.status = domain.status;
-    entity.failureCode = domain.failureCode;
-    entity.resultBalanceAmount = domain.resultBalanceAmount;
-    entity.resultBalanceCurrency = domain.resultBalanceCurrency;
-    entity.attempts = domain.attempts;
-    entity.nextAttemptAt = domain.nextAttemptAt;
-    entity.expiresAt = domain.expiresAt;
-    entity.createdAt = domain.createdAt;
-    entity.processedAt = domain.processedAt;
-    
-    return entity;
+  static toPersistence(domain: WagerTransaction): any {
+    return {
+      id: domain.id,
+      providerId: domain.providerId,
+      externalTransactionId: domain.externalTransactionId,
+      idempotencyKey: domain.idempotencyKey,
+      payloadHash: domain.payloadHash,
+      walletId: domain.walletId,
+      playerId: domain.playerId,
+      roundId: domain.roundId,
+      gameId: domain.gameId,
+      kind: domain.kind,
+      amount: domain.amount,
+      currency: domain.currency,
+      referenceExternalTransactionId: domain.referenceExternalTransactionId,
+      referenceTransactionId: domain.referenceTransactionId,
+      status: domain.status,
+      failureCode: domain.failureCode,
+      resultBalanceAmount: domain.resultBalanceAmount,
+      resultBalanceCurrency: domain.resultBalanceCurrency,
+      attempts: domain.attempts,
+      nextAttemptAt: domain.nextAttemptAt,
+      expiresAt: domain.expiresAt,
+      createdAt: domain.createdAt,
+      processedAt: domain.processedAt,
+    };
   }
 }

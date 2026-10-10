@@ -10,18 +10,19 @@ export class MikroOrmOutboxMessageRepository implements OutboxMessageRepository 
   constructor(private readonly em: EntityManager) {}
 
   async save(message: OutboxMessage): Promise<void> {
-    const entity = OutboxMessageMapper.toEntity(message);
+    const data = OutboxMessageMapper.toEntity(message);
     const exists = await this.em.findOne(OutboxMessageEntity, { id: message.id });
     if (exists) {
-      this.em.assign(exists, entity);
+      this.em.assign(exists, data);
       this.em.persist(exists);
     } else {
+      const entity = this.em.create(OutboxMessageEntity, data);
       this.em.persist(entity);
     }
   }
 
   async saveAll(messages: OutboxMessage[]): Promise<void> {
-    const entities = messages.map(msg => OutboxMessageMapper.toEntity(msg));
+    const entities = messages.map(msg => this.em.create(OutboxMessageEntity, OutboxMessageMapper.toEntity(msg)));
     this.em.persist(entities);
   }
 

@@ -15,15 +15,15 @@ export class WalletMapper {
     });
   }
 
-  static toEntity(domain: Wallet): WalletEntity {
-    const entity = new WalletEntity();
-    entity.id = domain.id;
-    entity.playerId = domain.playerId;
-    entity.currency = domain.currency;
-    entity.balance = domain.balance.toJSON().amount;
-    entity.version = domain.version;
-    entity.createdAt = domain.createdAt;
-    entity.updatedAt = domain.updatedAt;
-    return entity;
+  static toEntity(domain: Wallet): any {
+    return {
+      id: domain.id,
+      playerId: domain.playerId,
+      currency: domain.currency,
+      balance: domain.balance.toJSON().amount,
+      version: domain.version,
+      createdAt: domain.createdAt,
+      updatedAt: domain.updatedAt,
+    };
   }
 }

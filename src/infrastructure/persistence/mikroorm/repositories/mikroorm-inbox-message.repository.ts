@@ -10,7 +10,7 @@ export class MikroOrmInboxMessageRepository implements InboxMessageRepository {
   constructor(private readonly em: EntityManager) {}
 
   async save(message: InboxMessage): Promise<void> {
-    const entity = InboxMessageMapper.toEntity(message);
+    const entity = this.em.create(InboxMessageEntity, InboxMessageMapper.toEntity(message));
     this.em.persist(entity);
   }
 
